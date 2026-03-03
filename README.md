@@ -8,7 +8,7 @@
 
 Explore current prices, compare stations, view historical trends, and get directions – all in one tool.
 
-🔗 **Live Demo:** [https://geo-way.github.io/CityTank]([https://geo-way.github.io/CityTank](https://geo-way.github.io/citytank.io/)) *(Demo)*
+🔗 **Live Demo:** [https://geo-way.github.io/CityTank](https://geo-way.github.io/CityTank) *(Demo)*
 
 ---
 
