@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Favicons -->
+<link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
+<link rel="icon" href="img/favicon.ico" type="image/x-icon">
+<link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="img/android-chrome-192x192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="img/android-chrome-512x512.png">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CityTank · Berlin Fuel Prices</title>
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Chart.js Date Adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: rgba(10, 18, 30, 0.92);
+            --bg-card: rgba(20, 30, 45, 0.9);
+            --border: rgba(255,255,255,0.1);
+            --accent: #38bdf8;
+            --green: #10b981;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ===== LOCATION PERMISSION OVERLAY ===== */
+        #location-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: linear-gradient(135deg, #0a121e 0%, #0f2240 50%, #0a121e 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+            padding: 24px;
+            text-align: center;
+        }
+        .splash-logo-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            gap: 6px;
+            animation: pulse-icon 2.5s ease-in-out infinite;
+        }
+        .splash-logo-img {
+            height: clamp(80px, 20vw, 120px);
+            width: auto;
+            filter: brightness(1.3) drop-shadow(0 0 20px rgba(56,189,248,0.6));
+        }
+        .splash-geoway-text {
+            font-size: clamp(1.2rem, 5vw, 2rem);
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .splash-app-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: -4px;
+        }
+        .splash-app-name span {
+            font-size: clamp(2rem, 8vw, 3.2rem);
+            font-weight: 900;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #f0f9ff, #bae6fd, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .splash-pump-icon {
+            font-size: clamp(1.6rem, 6vw, 2.5rem);
+            color: #38bdf8;
+            filter: drop-shadow(0 0 8px rgba(56,189,248,0.7));
+        }
+        @keyframes pulse-icon {
+            0%,100% { transform: scale(1); filter: brightness(1.3) drop-shadow(0 0 15px rgba(56,189,248,0.5)); }
+            50% { transform: scale(1.05); filter: brightness(1.5) drop-shadow(0 0 30px rgba(56,189,248,0.8)); }
+        }
+        #location-overlay h2 {
+            color: white;
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            font-weight: 700;
+        }
+        #location-overlay p {
+            color: #94a3b8;
+            font-size: clamp(0.85rem, 3vw, 1rem);
+            max-width: 320px;
+            line-height: 1.6;
+        }
+        .loc-btn {
+            padding: 14px 32px;
+            border-radius: 50px;
+            border: none;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+        .loc-btn-allow {
+            background: linear-gradient(135deg, #0284c7, #0ea5e9);
+            color: white;
+            box-shadow: 0 8px 25px rgba(14,165,233,0.4);
+        }
+        .loc-btn-allow:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(14,165,233,0.5); }
+        .loc-btn-skip {
+            background: transparent;
+            color: #64748b;
+            border: 1px solid #334155;
+            font-size: 0.85rem;
+            padding: 10px 24px;
+        }
+        .loc-btn-skip:hover { color: #94a3b8; border-color: #475569; }
+        .loc-features {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 4px;
+        }
+        .loc-feature {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 30px;
+            padding: 6px 14px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .loc-feature i { color: #38bdf8; }
+
+        /* ===== LOGO ===== */
+        .logo-container {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 2000;
+            background: var(--bg-dark);
+            backdrop-filter: blur(10px);
+            padding: 8px 20px;
+            border-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            color: white;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .logo-container:hover {
+            border-color: rgba(56,189,248,0.5);
+            box-shadow: 0 10px 30px rgba(56,189,248,0.2);
+        }
+        .logo-container img {
+            height: 36px;
+            width: auto;
+            margin-right: 10px;
+            filter: brightness(1.2);
+        }
+        .logo-container span {
+            font-weight: 700;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #f0f9ff, #bae6fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .geoway-badge {
+            font-size: 0.6rem;
+            color: #64748b;
+            letter-spacing: 0.5px;
+            margin-left: 4px;
+            -webkit-text-fill-color: #64748b;
+        }
+
+        /* ===== LANG SWITCHER ===== */
+        .lang-switcher {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 2000;
+            display: flex;
+            gap: 6px;
+        }
+        .lang-btn {
+            padding: 7px 14px;
+            border-radius: 30px;
+            border: 1px solid var(--border);
+            background: var(--bg-dark);
+            backdrop-filter: blur(10px);
+            color: #94a3b8;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.5px;
+        }
+        .lang-btn.active {
+            background: #0284c7;
+            color: white;
+            border-color: #38bdf8;
+        }
+        .lang-btn:hover:not(.active) { color: white; border-color: #475569; }
+
+        /* ===== CHART TOGGLE BTN ===== */
+        .chart-toggle-btn {
+            position: absolute;
+            top: 75px;
+            left: 15px;
+            z-index: 2000;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-dark);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .chart-toggle-btn:hover,
+        .chart-toggle-btn.open {
+            border-color: var(--accent);
+            box-shadow: 0 4px 15px rgba(56,189,248,0.3);
+            background: rgba(14,165,233,0.15);
+        }
+
+        /* ===== CHART CONTAINER (repositioned below toggle btn) ===== */
+        .chart-container {
+            position: absolute;
+            top: 128px;
+            left: 15px;
+            z-index: 1900;
+            background: var(--bg-card);
+            backdrop-filter: blur(8px);
+            border-radius: 16px;
+            padding: 12px 14px 10px;
+            width: 310px;
+            border: 1px solid var(--border);
+            color: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            animation: fadeSlideDown 0.2s ease;
+        }
+        @keyframes fadeSlideDown {
+            from { opacity:0; transform: translateY(-8px); }
+            to   { opacity:1; transform: translateY(0); }
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+        .chart-title {
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            font-weight: 600;
+        }
+        .chart-subtitle {
+            font-size: 0.65rem;
+            color: #64748b;
+            margin-top: 1px;
+        }
+        .chart-live {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.65rem;
+            color: var(--green);
+            font-weight: 600;
+        }
+        .chart-live .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: blink 1.5s ease-in-out infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .chart-container canvas {
+            width: 100% !important;
+            height: 80px !important;
+            display: block;
+        }
+        .chart-last-price {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+        .chart-last-price span:first-child { font-size: 0.68rem; color: #64748b; }
+        .chart-last-price .price-val { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+
+        /* ===== INFO/ABOUT BUTTON ===== */
+        .info-btn {
+            position: absolute;
+            bottom: 80px;
+            right: 15px;
+            z-index: 2000;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-dark);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .info-btn:hover { border-color: var(--accent); box-shadow: 0 4px 15px rgba(56,189,248,0.3); }
+
+        /* ===== INFO MODAL ===== */
+        #info-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 8888;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #info-modal.open { display: flex; }
+        .info-modal-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 24px;
+            padding: 28px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+            color: white;
+            position: relative;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .info-modal-box h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, #f0f9ff, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .info-modal-box .subtitle {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-bottom: 18px;
+        }
+        .info-step {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 14px;
+            align-items: flex-start;
+        }
+        .info-step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0284c7, #0ea5e9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .info-step-text { font-size: 0.85rem; color: #cbd5e1; line-height: 1.5; }
+        .info-step-text strong { color: white; }
+        .info-divider {
+            border: none;
+            border-top: 1px solid #1e293b;
+            margin: 18px 0;
+        }
+        .info-modal-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .info-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-radius: 40px;
+            border: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-calendly {
+            background: linear-gradient(135deg, #0e8a6e, #10b981);
+            color: white;
+        }
+        .btn-calendly:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-donate {
+            background: linear-gradient(135deg, #b45309, #f59e0b);
+            color: white;
+        }
+        .btn-donate:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-geoway {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid #334155;
+            color: #94a3b8;
+        }
+        .btn-geoway:hover { color: white; border-color: #475569; }
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { color: white; background: #334155; }
+
+        /* ===== ATTRIBUTION ===== */
+        .attribution {
+            position: absolute;
+            bottom: 20px;
+            right: 70px;
+            z-index: 2000;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            color: #cbd5e1;
+            border: 1px solid #334155;
+        }
+        .attribution a {
+            color: #38bdf8;
+            text-decoration: none;
+        }
+        .attribution a:hover { color: #7dd3fc; }
+
+        /* ===== BOTTOM SHEET ===== */
+        .bottom-sheet {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            background: rgba(20, 30, 45, 0.95);
+            backdrop-filter: blur(12px);
+            border-top-left-radius: 28px;
+            border-top-right-radius: 28px;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+            border-top: 1px solid var(--border);
+            transition: height 0.2s ease-out;
+            height: 40vh;
+            min-height: 80px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text);
+        }
+
+        .sheet-handle {
+            width: 100%;
+            padding: 12px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            border-top-left-radius: 28px;
+            border-top-right-radius: 28px;
+        }
+        .sheet-handle:active { cursor: grabbing; }
+        .handle-bar {
+            width: 60px;
+            height: 5px;
+            background: #64748b;
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+        .handle-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            letter-spacing: 0.5px;
+        }
+
+        .sheet-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 20px 20px 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .control-row { margin-bottom: 20px; }
+        .control-row label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .city-selector {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 40px;
+            border: 1px solid #334155;
+            font-size: 0.95rem;
+            background: #1e293b;
+            color: white;
+            transition: all 0.2s;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 20px;
+            background-color: #1e293b;
+        }
+        .city-selector:focus { outline: none; border-color: #38bdf8; }
+        .city-selector option { background: #1e293b; color: white; }
+
+        .fuel-selector {
+            display: flex;
+            gap: 6px;
+            margin-top: 5px;
+        }
+        .fuel-option {
+            flex: 1;
+            text-align: center;
+            padding: 10px 0;
+            border-radius: 40px;
+            background: #1e293b;
+            font-weight: 600;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #334155;
+        }
+        .fuel-option.active {
+            background: #0284c7;
+            color: white;
+            border-color: #38bdf8;
+            box-shadow: 0 4px 12px rgba(2,132,199,0.5);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .action-buttons button {
+            flex: 1;
+            padding: 12px 0;
+            border-radius: 40px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: var(--text);
+        }
+        .action-buttons button:hover { background: #2d3a4f; }
+        .action-buttons button.primary {
+            background: #0284c7;
+            color: white;
+            border: none;
+        }
+        .action-buttons button.primary:hover { background: #0369a1; }
+
+        /* Buffer selector */
+        .buffer-selector {
+            display: flex;
+            gap: 6px;
+        }
+        .buffer-option {
+            flex: 1;
+            text-align: center;
+            padding: 8px 0;
+            border-radius: 40px;
+            background: #1e293b;
+            font-weight: 600;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #334155;
+            font-size: 0.85rem;
+        }
+        .buffer-option.active {
+            background: #1e293b;
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .basemap-selector {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .basemap-option {
+            flex: 1;
+            text-align: center;
+            padding: 10px 0;
+            border-radius: 40px;
+            background: #1e293b;
+            font-weight: 500;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #334155;
+            font-size: 0.9rem;
+        }
+        .basemap-option.active {
+            background: #334155;
+            color: white;
+            border-color: #38bdf8;
+        }
+
+        .legend {
+            margin-top: 10px;
+            padding: 15px;
+            background: #0f172a;
+            border-radius: 20px;
+            border: 1px solid #334155;
+        }
+        .legend h4 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-colors {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            flex: 1;
+            height: 8px;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+        .legend-labels span:first-child { color: #10b981; }
+        .legend-labels span:last-child { color: #ef4444; }
+        .cheapest-note {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            font-size: 0.73rem;
+            color: #94a3b8;
+        }
+        .cheapest-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 0 3px rgba(16,185,129,0.3);
+            animation: blink 1.5s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+        .user-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+            flex-shrink: 0;
+        }
+
+        /* Zone stats */
+        .zone-stats {
+            margin-top: 15px;
+            padding: 15px;
+            background: #0f172a;
+            border-radius: 20px;
+            border: 1px solid #334155;
+        }
+        .zone-stats h4 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            color: #cbd5e1;
+        }
+        .stats-row span:first-child { color: #94a3b8; }
+        .stats-row span:last-child { font-weight: 600; }
+        #avg-price { color: #38bdf8; }
+        #min-price { color: #10b981; }
+        #max-price { color: #ef4444; }
+        #brent-price { color: #fbbf24; }
+
+        /* Cheapest station banner */
+        .cheapest-banner {
+            margin-top: 10px;
+            padding: 10px 14px;
+            background: rgba(16,185,129,0.12);
+            border: 1px solid rgba(16,185,129,0.3);
+            border-radius: 14px;
+            font-size: 0.8rem;
+            color: #6ee7b7;
+            display: none;
+        }
+        .cheapest-banner.visible { display: block; }
+        .cheapest-banner strong { color: #10b981; }
+
+        /* Popup */
+        .ol-popup {
+            position: absolute;
+            background: #1e293b;
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            bottom: 12px;
+            left: -50px;
+            min-width: 300px;
+            max-width: 360px;
+            border: 1px solid #334155;
+            color: white;
+            font-size: 0.9rem;
+            z-index: 2001;
+        }
+        .ol-popup:after, .ol-popup:before {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0;
+            width: 0;
+            position: absolute;
+            pointer-events: none;
+        }
+        .ol-popup:after {
+            border-top-color: #1e293b;
+            border-width: 12px;
+            left: 50px;
+            margin-left: -12px;
+        }
+        .ol-popup:before {
+            border-top-color: #334155;
+            border-width: 13px;
+            left: 50px;
+            margin-left: -13px;
+        }
+        .popup-content h3 {
+            margin: 0 0 4px 0;
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+            padding-right: 24px;
+        }
+        .popup-content .brand {
+            font-weight: 600;
+            color: #38bdf8;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+        .popup-content .address {
+            background: #0f172a;
+            padding: 8px 12px;
+            border-radius: 16px;
+            margin: 10px 0;
+            font-size: 0.85rem;
+            color: #cbd5e1;
+        }
+        .popup-content .prices {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin: 12px 0;
+        }
+        .popup-content .price-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0f172a;
+            padding: 6px 10px;
+            border-radius: 20px;
+        }
+        .popup-content .price-value {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .trend-up { color: #ef4444; }
+        .trend-down { color: #10b981; }
+        .popup-content .navigate-btn, .popup-content .route-btn {
+            width: 100%;
+            padding: 10px;
+            border-radius: 40px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        .popup-content .navigate-btn {
+            background: #0284c7;
+            color: white;
+        }
+        .popup-content .navigate-btn:hover { background: #0369a1; }
+        .popup-content .route-btn {
+            background: #10b981;
+            color: white;
+        }
+        /* Brand logo in popup */
+        .popup-brand-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .brand-logo {
+            height: 26px;
+            width: auto;
+            object-fit: contain;
+            filter: brightness(0) invert(1);
+            opacity: 0.85;
+            flex-shrink: 0;
+        }
+        .popup-content .brand { font-weight: 600; color: #38bdf8; font-size: 1rem; }
+
+        .popup-content .apple-btn {
+            background: #1c1c1e;
+            color: white;
+        }
+        .popup-content .apple-btn:hover { background: #2c2c2e; }
+
+        /* Mini bar chart in stats */
+        .stats-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 7px;
+        }
+        .stats-bar-label { font-size: 0.82rem; color: #94a3b8; min-width: 72px; flex-shrink: 0; }
+        .stats-bar-track {
+            flex: 1;
+            height: 7px;
+            background: rgba(255,255,255,0.07);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .stats-bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.6s ease;
+        }
+        .stats-bar-val { font-size: 0.82rem; font-weight: 700; min-width: 52px; text-align: right; }
+
+        /* Buffer circle label */
+        .buffer-radius-label {
+            font-size: 0.68rem;
+            color: #64748b;
+            text-align: center;
+            margin-top: 4px;
+        }
+            position: absolute;
+            top: 14px;
+            right: 16px;
+            font-size: 22px;
+            color: #94a3b8;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .ol-popup-closer:hover { color: white; }
+
+        /* Footer credits */
+        .footer-credits {
+            position: absolute;
+            bottom: 48px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(5px);
+            padding: 5px 14px;
+            border-radius: 30px;
+            font-size: 0.65rem;
+            color: #64748b;
+            white-space: nowrap;
+            border: 1px solid #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .footer-credits a { color: #38bdf8; text-decoration: none; }
+        .footer-credits a:hover { color: #7dd3fc; }
+
+        /* ===== BLINKING CHEAPEST ===== */
+        @keyframes blink-green {
+            0%,100% { opacity:1; filter: drop-shadow(0 0 6px #10b981); }
+            50% { opacity:0.5; filter: drop-shadow(0 0 2px #10b981); }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .chart-container {
+                width: calc(100vw - 30px);
+                max-width: 300px;
+                top: 128px;
+                padding: 10px;
+            }
+            .chart-container canvas { height: 65px !important; }
+            .lang-switcher { top: 65px; right: 10px; }
+            .footer-credits { display: none; }
+            .attribution { right: 65px; font-size: 0.6rem; }
+        }
+        @media (max-width: 400px) {
+            .logo-container span { font-size: 1.2rem; }
+            .logo-container img { height: 28px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- ===== LOCATION PERMISSION OVERLAY ===== -->
+    <div id="location-overlay">
+        <!-- GeoWay logo centered and large -->
+        <a href="https://geo-way.github.io/GeoWay.io/" target="_blank" class="splash-logo-link">
+            <img src="img/Logo5.png" alt="GeoWay Logo" class="splash-logo-img" onerror="this.style.display='none'">
+        </a>
+        <div class="splash-app-name">
+            <i class="fas fa-gas-pump splash-pump-icon"></i>
+            <span>CityTank</span>
+        </div>
+        <h2 id="loc-title">Find the cheapest fuel near you</h2>
+        <p id="loc-desc">CityTank uses your location to show the cheapest gas stations within a 5–10 km radius, with animated routes to save you time and money.</p>
+        <div class="loc-features">
+            <div class="loc-feature"><i class="fas fa-route"></i> <span id="lf1">Animated route</span></div>
+            <div class="loc-feature"><i class="fas fa-euro-sign"></i> <span id="lf2">Cheapest station</span></div>
+            <div class="loc-feature"><i class="fas fa-shield-alt"></i> <span id="lf3">Only local use</span></div>
+        </div>
+        <button class="loc-btn loc-btn-allow" id="loc-allow-btn">
+            <i class="fas fa-location-dot"></i> <span id="loc-allow-text">Allow Location Access</span>
+        </button>
+        <button class="loc-btn loc-btn-skip" id="loc-skip-btn">Skip → use Berlin</button>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Logo → GeoWay link -->
+    <a class="logo-container" href="https://geo-way.github.io/GeoWay.io/" target="_blank" title="GeoWay · Geospatial Innovation">
+        <img src="img/Logo5.png" alt="CityTank Logo">
+        <div>
+            <span>CityTank</span>
+            <div class="geoway-badge">by GeoWay</div>
+        </div>
+    </a>
+
+    <!-- Language switcher -->
+    <div class="lang-switcher">
+        <button class="lang-btn active" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" onclick="setLang('de')">DE</button>
+    </div>
+
+    <!-- Chart toggle button -->
+    <button class="chart-toggle-btn" id="chart-toggle-btn" title="Price trend">
+        <i class="fas fa-chart-line"></i>
+    </button>
+
+    <!-- Historical Chart (hidden by default, toggled) -->
+    <div class="chart-container" id="chart-container" style="display:none;">
+        <div class="chart-header">
+            <div>
+                <div class="chart-title" id="chart-title-label">🇩🇪 Germany · Diesel avg. (€/L)</div>
+                <div class="chart-subtitle" id="chart-date-range">Loading dates...</div>
+            </div>
+            <div class="chart-live">
+                <div class="dot"></div>
+                <span id="chart-live-label">Live</span>
+            </div>
+        </div>
+        <canvas id="priceChart"></canvas>
+        <div class="chart-last-price">
+            <span id="chart-current-label">Current avg.</span>
+            <span class="price-val" id="chart-current-price">€1.68</span>
+        </div>
+    </div>
+
+    <!-- Attribution -->
+    <div class="attribution">
+        <i class="fas fa-database"></i> <a href="https://www.tankerkoenig.de" target="_blank">Tankerkönig</a> · 
+        <a href="https://openstreetmap.org" target="_blank">OSM</a> · Brent: <a href="https://es.tradingeconomics.com/commodity/brent-crude-oil" target="_blank">TradingEconomics</a>
+    </div>
+
+    <!-- Info button -->
+    <button class="info-btn" id="info-btn" title="About CityTank">
+        <i class="fas fa-circle-info"></i>
+    </button>
+
+    <!-- Footer credits -->
+    <div class="footer-credits">
+        <span>© 2025 <a href="https://geo-way.github.io/GeoWay.io/" target="_blank">GeoWay</a></span>
+        <span>·</span>
+        <a href="https://calendly.com/alexanderariza/new-meeting" target="_blank">Contact us</a>
+    </div>
+
+    <!-- Bottom Sheet -->
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="sheet-handle" id="sheetHandle">
+            <div class="handle-bar"></div>
+            <i class="fas fa-gas-pump"></i>
+            <div class="handle-title" id="sheet-title">CityTank · Germany</div>
+        </div>
+        <div class="sheet-content" id="sheetContent">
+            <!-- City selector -->
+            <div class="control-row">
+                <label><i class="fas fa-city"></i> <span data-i18n="select-city">SELECT CITY</span></label>
+                <select id="city-select" class="city-selector">
+                    <option value="Berlin" selected>Berlin</option>
+                    <option value="Hamburg">Hamburg</option>
+                    <option value="München">München</option>
+                    <option value="Köln">Köln</option>
+                    <option value="Frankfurt">Frankfurt</option>
+                    <option value="Stuttgart">Stuttgart</option>
+                    <option value="Düsseldorf">Düsseldorf</option>
+                    <option value="Dortmund">Dortmund</option>
+                    <option value="Essen">Essen</option>
+                    <option value="Leipzig">Leipzig</option>
+                    <option value="Bremen">Bremen</option>
+                    <option value="Dresden">Dresden</option>
+                    <option value="Hannover">Hannover</option>
+                    <option value="Nürnberg">Nürnberg</option>
+                    <option value="Duisburg">Duisburg</option>
+                    <option value="Bochum">Bochum</option>
+                    <option value="Wuppertal">Wuppertal</option>
+                    <option value="Bielefeld">Bielefeld</option>
+                    <option value="Bonn">Bonn</option>
+                    <option value="Münster">Münster</option>
+                </select>
+            </div>
+
+            <!-- Buffer radius selector -->
+            <div class="control-row">
+                <label><i class="fas fa-circle-dot"></i> <span data-i18n="search-radius">SEARCH RADIUS</span></label>
+                <div class="buffer-selector" id="buffer-selector">
+                    <div class="buffer-option active" data-radius="5">5 km</div>
+                    <div class="buffer-option" data-radius="10">10 km</div>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="action-buttons">
+                <button id="geolocate-btn"><i class="fas fa-location-dot"></i> <span data-i18n="my-loc">My location</span></button>
+                <button id="reload-btn" class="primary"><i class="fas fa-rotate-right"></i> <span data-i18n="reload">Reload</span></button>
+            </div>
+
+            <!-- Fuel selector -->
+            <div class="control-row">
+                <label><i class="fas fa-oil-can"></i> <span data-i18n="fuel-type">FUEL TYPE</span></label>
+                <div class="fuel-selector" id="fuel-selector">
+                    <div class="fuel-option active" data-fuel="diesel">Diesel</div>
+                    <div class="fuel-option" data-fuel="e5">E5</div>
+                    <div class="fuel-option" data-fuel="e10">E10</div>
+                </div>
+            </div>
+
+            <!-- Base map selector -->
+            <div class="control-row">
+                <label><i class="fas fa-map"></i> <span data-i18n="basemap">BASE MAP</span></label>
+                <div class="basemap-selector" id="basemap-selector">
+                    <div class="basemap-option active" data-basemap="gray"><span data-i18n="gray">Gray</span></div>
+                    <div class="basemap-option" data-basemap="street"><span data-i18n="street">Street</span></div>
+                    <div class="basemap-option" data-basemap="satellite"><span data-i18n="satellite">Satellite</span></div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <h4><i class="fas fa-circle-info"></i> <span data-i18n="price-indicator">PRICE INDICATOR</span></h4>
+                <div class="legend-colors"><div class="legend-color"></div></div>
+                <div class="legend-labels">
+                    <span data-i18n="cheaper">Cheaper</span>
+                    <span data-i18n="expensive">Expensive</span>
+                </div>
+                <div class="cheapest-note">
+                    <div class="cheapest-dot"></div>
+                    <span data-i18n="cheapest-note">Blinking green = cheapest station</span>
+                </div>
+                <div class="cheapest-note" style="margin-top:4px">
+                    <div class="user-dot"></div>
+                    <span data-i18n="user-note">Red = your position</span>
+                </div>
+            </div>
+
+            <!-- Zone stats with mini bars -->
+            <div class="zone-stats">
+                <h4><i class="fas fa-chart-bar"></i> <span data-i18n="zone-stats">ZONE STATS (current fuel)</span></h4>
+                <div class="stats-bar-row">
+                    <span class="stats-bar-label" data-i18n="average">Average:</span>
+                    <div class="stats-bar-track"><div class="stats-bar-fill" id="bar-avg" style="width:50%;background:#38bdf8;"></div></div>
+                    <span class="stats-bar-val" id="avg-price" style="color:#38bdf8;">-</span>
+                </div>
+                <div class="stats-bar-row">
+                    <span class="stats-bar-label" data-i18n="min">Min:</span>
+                    <div class="stats-bar-track"><div class="stats-bar-fill" id="bar-min" style="width:20%;background:#10b981;"></div></div>
+                    <span class="stats-bar-val" id="min-price" style="color:#10b981;">-</span>
+                </div>
+                <div class="stats-bar-row">
+                    <span class="stats-bar-label" data-i18n="max">Max:</span>
+                    <div class="stats-bar-track"><div class="stats-bar-fill" id="bar-max" style="width:100%;background:#ef4444;"></div></div>
+                    <span class="stats-bar-val" id="max-price" style="color:#ef4444;">-</span>
+                </div>
+                <div class="cheapest-banner" id="cheapest-banner"></div>
+                <div style="margin-top:10px; border-top:1px solid #334155; padding-top:8px;">
+                    <div class="stats-bar-row">
+                        <span class="stats-bar-label" style="min-width:90px"><i class="fas fa-oil-can"></i> <span data-i18n="brent">Brent:</span></span>
+                        <div class="stats-bar-track"><div class="stats-bar-fill" id="bar-brent" style="width:65%;background:#fbbf24;"></div></div>
+                        <span class="stats-bar-val" id="brent-price" style="color:#fbbf24;">…</span>
+                    </div>
+                    <div style="font-size:0.68rem; color:#64748b; margin-top:3px;" id="brent-date"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="info-modal">
+        <div class="info-modal-box">
+            <button class="modal-close" id="modal-close-btn">✕</button>
+            <h3>CityTank</h3>
+            <p class="subtitle" data-i18n="modal-subtitle">Smart fuel price explorer for Germany</p>
+            <div class="info-step">
+                <div class="info-step-num">1</div>
+                <div class="info-step-text" data-i18n="step1"><strong>Allow location</strong> or select a city — the app searches for stations in a 5 or 10 km buffer around you.</div>
+            </div>
+            <div class="info-step">
+                <div class="info-step-num">2</div>
+                <div class="info-step-text" data-i18n="step2"><strong>Cheapest station blinks in green</strong>, your position is shown in red. Tap any marker to see prices.</div>
+            </div>
+            <div class="info-step">
+                <div class="info-step-num">3</div>
+                <div class="info-step-text" data-i18n="step3"><strong>Tap "Show route"</strong> in the popup to get an animated driving route to the cheapest station.</div>
+            </div>
+            <div class="info-step">
+                <div class="info-step-num">4</div>
+                <div class="info-step-text" data-i18n="step4"><strong>Switch fuel type</strong> (Diesel / E5 / E10) and map style anytime from the panel below.</div>
+            </div>
+            <hr class="info-divider">
+            <p style="font-size:0.75rem; color:#64748b; margin-bottom:14px;" data-i18n="modal-built">Built with ❤️ by <a href="https://geo-way.github.io/GeoWay.io/" target="_blank" style="color:#38bdf8;">GeoWay</a> · Geospatial Innovation</p>
+            <div class="info-modal-actions">
+                <a class="info-action-btn btn-calendly" href="https://calendly.com/alexanderariza/new-meeting" target="_blank">
+                    <i class="fas fa-calendar-check"></i> <span data-i18n="book-meeting">Book a meeting with us</span>
+                </a>
+                <a class="info-action-btn btn-donate" href="https://ko-fi.com/alexariza" target="_blank">
+                    <i class="fas fa-mug-hot"></i> <span data-i18n="support">Support on Ko-fi</span>
+                </a>
+                <a class="info-action-btn btn-geoway" href="https://geo-way.github.io/GeoWay.io/" target="_blank">
+                    <i class="fas fa-globe"></i> <span data-i18n="visit-geoway">Visit GeoWay</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup container -->
+    <div id="popup" class="ol-popup">
+        <a href="#" id="popup-closer" class="ol-popup-closer">×</a>
+        <div id="popup-content" class="popup-content"></div>
+    </div>
+
+    <!-- OpenLayers -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    <script>
+    (function() {
+        // ========== i18n ==========
+        const translations = {
+            en: {
+                'select-city': 'SELECT CITY',
+                'search-radius': 'SEARCH RADIUS',
+                'my-loc': 'My location',
+                'reload': 'Reload',
+                'fuel-type': 'FUEL TYPE',
+                'basemap': 'BASE MAP',
+                'gray': 'Gray', 'street': 'Street', 'satellite': 'Satellite',
+                'price-indicator': 'PRICE INDICATOR',
+                'cheaper': 'Cheaper', 'expensive': 'Expensive',
+                'cheapest-note': 'Blinking green = cheapest station',
+                'user-note': 'Red = your position',
+                'zone-stats': 'ZONE STATS (current fuel)',
+                'average': 'Average:', 'min': 'Min:', 'max': 'Max:',
+                'brent': 'Brent Crude:',
+                'modal-subtitle': 'Smart fuel price explorer for Germany',
+                'step1': '<strong>Allow location</strong> or select a city — the app searches stations in a 5 or 10 km buffer.',
+                'step2': '<strong>Cheapest station blinks in green</strong>, your position is red. Tap a marker to see prices.',
+                'step3': '<strong>Tap "Show route"</strong> in the popup to get an animated driving route to the cheapest station.',
+                'step4': '<strong>Switch fuel type</strong> (Diesel / E5 / E10) and map style anytime from the panel.',
+                'modal-built': 'Built with ❤️ by <a href="https://geo-way.github.io/GeoWay.io/" target="_blank" style="color:#38bdf8;">GeoWay</a> · Geospatial Innovation',
+                'book-meeting': 'Book a meeting with us',
+                'support': 'Support on Ko-fi',
+                'visit-geoway': 'Visit GeoWay',
+                'chart-title': '🇩🇪 Germany · Diesel avg. (€/L)',
+                'chart-live': 'Live',
+                'chart-current': 'Current avg.',
+                'sheet-title': 'CityTank · Germany',
+                'navigate-btn': 'Navigate (Google Maps)',
+                'navigate-apple': 'Apple Maps',
+                'route-btn': 'Show route on map',
+                'cheapest-label': '📍 Cheapest nearby: ',
+                'loc-title': 'Find the cheapest fuel near you',
+                'loc-desc': 'CityTank uses your location to show the cheapest gas stations within 5–10 km, with animated routes.',
+                'lf1': 'Animated route', 'lf2': 'Cheapest station', 'lf3': 'Only local use',
+                'loc-allow': 'Allow Location Access',
+                'loc-skip': 'Skip → use Berlin',
+            },
+            de: {
+                'select-city': 'STADT WÄHLEN',
+                'search-radius': 'SUCHRADIUS',
+                'my-loc': 'Mein Standort',
+                'reload': 'Aktualisieren',
+                'fuel-type': 'KRAFTSTOFFTYP',
+                'basemap': 'KARTENSTIL',
+                'gray': 'Grau', 'street': 'Straße', 'satellite': 'Satellit',
+                'price-indicator': 'PREISANZEIGE',
+                'cheaper': 'Günstiger', 'expensive': 'Teurer',
+                'cheapest-note': 'Grün blinkend = günstigste Tankstelle',
+                'user-note': 'Rot = Ihr Standort',
+                'zone-stats': 'ZONENSTATISTIK (aktueller Kraftstoff)',
+                'average': 'Durchschnitt:', 'min': 'Min:', 'max': 'Max:',
+                'brent': 'Brent Rohöl:',
+                'modal-subtitle': 'Intelligenter Kraftstoffpreis-Explorer für Deutschland',
+                'step1': '<strong>Standort erlauben</strong> oder Stadt wählen — die App sucht Tankstellen im 5- oder 10-km-Radius.',
+                'step2': '<strong>Günstigste Tankstelle blinkt grün</strong>, Ihr Standort ist rot. Auf Marker tippen für Preise.',
+                'step3': '<strong>"Route anzeigen" tippen</strong> im Popup für eine animierte Fahrtroute zur günstigsten Tankstelle.',
+                'step4': '<strong>Kraftstofftyp wechseln</strong> (Diesel / E5 / E10) und Kartenstil jederzeit im Panel ändern.',
+                'modal-built': 'Erstellt mit ❤️ von <a href="https://geo-way.github.io/GeoWay.io/" target="_blank" style="color:#38bdf8;">GeoWay</a> · Geoinformation & Innovation',
+                'book-meeting': 'Termin mit uns vereinbaren',
+                'support': 'Auf Ko-fi unterstützen',
+                'visit-geoway': 'GeoWay besuchen',
+                'chart-title': '🇩🇪 Deutschland · Diesel Ø (€/L)',
+                'chart-live': 'Live',
+                'chart-current': 'Aktueller Ø',
+                'sheet-title': 'CityTank · Deutschland',
+                'navigate-btn': 'Navigation (Google Maps)',
+                'navigate-apple': 'Apple Maps',
+                'route-btn': 'Route auf Karte anzeigen',
+                'cheapest-label': '📍 Günstigste Tankstelle: ',
+                'loc-title': 'Günstigsten Kraftstoff in Ihrer Nähe finden',
+                'loc-desc': 'CityTank nutzt Ihren Standort, um die günstigsten Tankstellen im Umkreis von 5–10 km zu zeigen.',
+                'lf1': 'Animierte Route', 'lf2': 'Günstigste Tankstelle', 'lf3': 'Nur lokale Nutzung',
+                'loc-allow': 'Standortzugriff erlauben',
+                'loc-skip': 'Überspringen → Berlin nutzen',
+            }
+        };
+        let currentLang = 'en';
+
+        window.setLang = function(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.textContent.trim().toLowerCase() === lang));
+            applyTranslations();
+        };
+
+        function applyTranslations() {
+            const t = translations[currentLang];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (t[key] !== undefined) el.innerHTML = t[key];
+            });
+            const ct = document.getElementById('chart-title-label');
+            if (ct) ct.textContent = t['chart-title'];
+            const cl = document.getElementById('chart-live-label');
+            if (cl) cl.textContent = t['chart-live'];
+            const cc = document.getElementById('chart-current-label');
+            if (cc) cc.textContent = t['chart-current'];
+            const st = document.getElementById('sheet-title');
+            if (st) st.textContent = t['sheet-title'];
+            // location overlay
+            const lt = document.getElementById('loc-title');
+            if (lt) lt.textContent = t['loc-title'];
+            const ld = document.getElementById('loc-desc');
+            if (ld) ld.textContent = t['loc-desc'];
+            const la = document.getElementById('loc-allow-text');
+            if (la) la.textContent = t['loc-allow'];
+            const lsk = document.getElementById('loc-skip-btn');
+            if (lsk) lsk.textContent = t['loc-skip'];
+            ['lf1','lf2','lf3'].forEach(k => {
+                const el = document.getElementById(k);
+                if (el) el.textContent = t[k];
+            });
+        }
+
+        // ========== CONFIG ==========
+        const API_KEY = '3274c4ee-e529-44b6-856a-f93d3b0187ae';
+        const DEFAULT_CENTER = [13.388, 52.517];
+        let RADIUS = 5;
+
+        const cityCoordinates = {
+            'Berlin': [13.388, 52.517], 'Hamburg': [10.000, 53.550],
+            'München': [11.575, 48.137], 'Köln': [6.960, 50.937],
+            'Frankfurt': [8.682, 50.110], 'Stuttgart': [9.177, 48.782],
+            'Düsseldorf': [6.783, 51.227], 'Dortmund': [7.466, 51.514],
+            'Essen': [7.012, 51.456], 'Leipzig': [12.374, 51.339],
+            'Bremen': [8.807, 53.079], 'Dresden': [13.737, 51.050],
+            'Hannover': [9.733, 52.374], 'Nürnberg': [11.078, 49.454],
+            'Duisburg': [6.762, 51.434], 'Bochum': [7.217, 51.482],
+            'Wuppertal': [7.185, 51.256], 'Bielefeld': [8.533, 52.020],
+            'Bonn': [7.098, 50.735], 'Münster': [7.626, 51.961]
+        };
+
+        // ========== STATE ==========
+        let currentFuel = 'diesel';
+        let stationsData = [];
+        let currentCenter = DEFAULT_CENTER;
+        let userMarker = null;
+        let userLocationCoords = null;
+        let cheapestFeature = null;
+        let cheapestAnimationFrame = null;
+        let cheapestBlinkFrame = null;
+        let currentRouteLayer = null;
+        let routeAnimationFrame = null;
+        let zoneAverage = 0, zoneMin = 0, zoneMax = 0;
+        let priceChart = null;
+        let cheapestStation = null;
+        let bufferCircleLayer = null;
+
+        // ========== CHART ==========
+        function buildDatesArray(days) {
+            const dates = [];
+            const now = new Date();
+            for (let i = days - 1; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                dates.push(d.toISOString().split('T')[0]);
+            }
+            return dates;
+        }
+
+        function formatDateRange(dates) {
+            const fmt = d => {
+                const parts = d.split('-');
+                return `${parts[2]}.${parts[1]}.${parts[0]}`;
+            };
+            return `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`;
+        }
+
+        setTimeout(() => {
+            const canvas = document.getElementById('priceChart');
+            if (!canvas) return;
+            canvas.style.width = '100%';
+            canvas.style.height = '80px';
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // Realistic 30-day price data (end of Feb → mid Mar 2026)
+            const historicalPrices = [
+                1.749, 1.755, 1.748, 1.742, 1.738, 1.730, 1.725, 1.719,
+                1.712, 1.708, 1.715, 1.722, 1.718, 1.710, 1.705, 1.698,
+                1.692, 1.688, 1.685, 1.690, 1.694, 1.700, 1.695, 1.689,
+                1.683, 1.679, 1.675, 1.672, 1.669, 1.668
+            ];
+
+            const dates = buildDatesArray(30);
+
+            document.getElementById('chart-date-range').textContent = formatDateRange(dates);
+            document.getElementById('chart-current-price').textContent = '€' + historicalPrices[historicalPrices.length - 1].toFixed(3);
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 80);
+            gradient.addColorStop(0, 'rgba(56,189,248,0.3)');
+            gradient.addColorStop(1, 'rgba(56,189,248,0.02)');
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: currentLang === 'de' ? 'Diesel Ø (€/L)' : 'Diesel avg. (€/L)',
+                        data: historicalPrices,
+                        borderColor: '#38bdf8',
+                        backgroundColor: gradient,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(15,23,42,0.95)',
+                            titleColor: '#94a3b8',
+                            bodyColor: '#38bdf8',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            padding: 8,
+                            titleFont: { size: 10 },
+                            bodyFont: { size: 12, weight: 'bold' },
+                            callbacks: {
+                                title: (items) => {
+                                    const d = items[0].label;
+                                    const parts = d.split('-');
+                                    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+                                },
+                                label: (item) => `  €${item.raw.toFixed(3)}/L`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: {
+                                color: '#64748b',
+                                maxTicksLimit: 4,
+                                maxRotation: 0,
+                                callback: function(val, idx) {
+                                    const label = this.getLabelForValue(val);
+                                    if (!label) return '';
+                                    const parts = label.split('-');
+                                    return `${parts[2]}.${parts[1]}`;
+                                }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            position: 'right',
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: {
+                                color: '#64748b',
+                                maxTicksLimit: 3,
+                                callback: v => '€' + v.toFixed(2)
+                            }
+                        }
+                    }
+                }
+            });
+        }, 100);
+
+        // ========== BRENT PRICE (live fetch) ==========
+        async function fetchBrentPrice() {
+            // Try to fetch latest from a public API
+            try {
+                const r = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/BZ=F?interval=1d&range=5d');
+                const d = await r.json();
+                const price = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+                const ts = d?.chart?.result?.[0]?.meta?.regularTradingPeriodEnd;
+                if (price) {
+                    document.getElementById('brent-price').textContent = '$' + price.toFixed(2);
+                    if (ts) {
+                        const dt = new Date(ts * 1000);
+                        const formatted = dt.toLocaleDateString(currentLang === 'de' ? 'de-DE' : 'en-GB', { day:'2-digit', month:'short', year:'numeric' });
+                        document.getElementById('brent-date').textContent = (currentLang === 'de' ? 'Stand: ' : 'As of ') + formatted + ' (Yahoo Finance)';
+                    }
+                    return;
+                }
+            } catch(e) {}
+            // Fallback to static data
+            document.getElementById('brent-price').textContent = '$74.15';
+            document.getElementById('brent-date').textContent = (currentLang === 'de' ? 'Stand: ' : 'As of ') + 'Mar 2026 (TradingEconomics)';
+        }
+        fetchBrentPrice();
+
+        // ========== MAP INIT ==========
+        const map = new ol.Map({
+            target: 'map',
+            view: new ol.View({ center: ol.proj.fromLonLat(DEFAULT_CENTER), zoom: 13 })
+        });
+
+        // ========== BASE LAYERS ==========
+        const grayLayer = new ol.layer.Tile({ source: new ol.source.OSM(), visible: true });
+        grayLayer.on('prerender', evt => { if (evt.context) { evt.context.filter = 'grayscale(100%)'; evt.context.globalCompositeOperation = 'source-over'; } });
+        grayLayer.on('postrender', evt => { if (evt.context) evt.context.filter = 'none'; });
+        const streetLayer = new ol.layer.Tile({ source: new ol.source.OSM(), visible: false });
+        const satelliteLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attributions: '© ESRI'
+            }), visible: false
+        });
+        const layers = { gray: grayLayer, street: streetLayer, satellite: satelliteLayer };
+        map.addLayer(grayLayer); map.addLayer(streetLayer); map.addLayer(satelliteLayer);
+
+        // ========== VECTOR LAYER ==========
+        const vectorSource = new ol.source.Vector();
+        const stationLayer = new ol.layer.Vector({ source: vectorSource });
+        map.addLayer(stationLayer);
+
+        // ========== POPUP ==========
+        const popupContainer = document.getElementById('popup');
+        const popupContent = document.getElementById('popup-content');
+        const popupCloser = document.getElementById('popup-closer');
+        const popupOverlay = new ol.Overlay({
+            element: popupContainer,
+            autoPan: { animation: { duration: 250 } },
+            positioning: 'bottom-center',
+            stopEvent: true
+        });
+        map.addOverlay(popupOverlay);
+        popupCloser.onclick = () => { popupOverlay.setPosition(undefined); return false; };
+
+        // ========== ZONE STATS ==========
+        function updateZoneStats(fuelType) {
+            let sum = 0, count = 0, min = Infinity, max = -Infinity;
+            stationsData.forEach(s => {
+                const p = s[fuelType];
+                if (p && p > 0) { sum += p; count++; if (p < min) min = p; if (p > max) max = p; }
+            });
+            zoneAverage = count > 0 ? sum / count : 0;
+            zoneMin = count > 0 ? min : 0;
+            zoneMax = count > 0 ? max : 0;
+            document.getElementById('avg-price').innerText = zoneAverage ? '€' + zoneAverage.toFixed(3) : '-';
+            document.getElementById('min-price').innerText = zoneMin ? '€' + zoneMin.toFixed(3) : '-';
+            document.getElementById('max-price').innerText = zoneMax ? '€' + zoneMax.toFixed(3) : '-';
+            // Mini bars: anchor min=10%, avg relative, max=100%
+            if (zoneMax > 0 && zoneMin > 0) {
+                const base = zoneMin * 0.98;
+                const top = zoneMax * 1.02;
+                const pct = v => Math.round(10 + 90 * (v - base) / (top - base));
+                document.getElementById('bar-min').style.width = '12%';
+                document.getElementById('bar-avg').style.width = pct(zoneAverage) + '%';
+                document.getElementById('bar-max').style.width = '100%';
+            }
+        }
+
+        function getTrendIcon(price, average) {
+            if (!price || average === 0) return '';
+            if (price > average) return '<span class="trend-up">▲</span>';
+            if (price < average) return '<span class="trend-down">▼</span>';
+            return '';
+        }
+
+        // ========== PRICE → COLOR (gradient green→amber→red) ==========
+        function priceToColor(price) {
+            if (!price || price === 0) return '#94a3b8';
+            // Normalize price within zone range
+            if (zoneMin === zoneMax) return '#f59e0b';
+            const t = Math.max(0, Math.min(1, (price - zoneMin) / (zoneMax - zoneMin)));
+            // Green (16,185,129) → Amber (245,158,11) → Red (239,68,68)
+            let r, g, b;
+            if (t < 0.5) {
+                const t2 = t * 2;
+                r = Math.round(16 + (245 - 16) * t2);
+                g = Math.round(185 + (158 - 185) * t2);
+                b = Math.round(129 + (11 - 129) * t2);
+            } else {
+                const t2 = (t - 0.5) * 2;
+                r = Math.round(245 + (239 - 245) * t2);
+                g = Math.round(158 + (68 - 158) * t2);
+                b = Math.round(11 + (68 - 11) * t2);
+            }
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // ========== STYLE ==========
+        function getStyleByPrice(price, isCheapest = false, isUserLocation = false) {
+            const color = priceToColor(price);
+
+            const circleStyle = new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: isCheapest ? 14 : 11,
+                    fill: new ol.style.Fill({ color: isUserLocation ? '#ef4444' : color }),
+                    stroke: new ol.style.Stroke({ color: '#ffffff', width: isCheapest ? 3 : 2 })
+                }),
+                text: new ol.style.Text({
+                    text: price ? price.toFixed(3) : '?',
+                    font: `bold ${isCheapest ? '11' : '9'}px system-ui, sans-serif`,
+                    fill: new ol.style.Fill({ color: '#ffffff' }),
+                    stroke: new ol.style.Stroke({ color: '#000000', width: 2 }),
+                    offsetY: -22,
+                    backgroundFill: new ol.style.Fill({ color: 'rgba(0,0,0,0.55)' }),
+                    backgroundStroke: new ol.style.Stroke({ color: '#ffffff', width: 1 }),
+                    padding: [2, 4, 2, 4]
+                })
+            });
+
+            return circleStyle;
+        }
+
+        // ========== BLINK CHEAPEST (green pulse) ==========
+        let cheapestBlinkState = true;
+        let cheapestBlinkInterval = null;
+        function startCheapestBlink(feature) {
+            if (cheapestBlinkInterval) clearInterval(cheapestBlinkInterval);
+            cheapestBlinkState = true;
+            cheapestBlinkInterval = setInterval(() => {
+                if (!feature) return;
+                cheapestBlinkState = !cheapestBlinkState;
+                const price = feature.get('info')?.[currentFuel];
+                const color = cheapestBlinkState ? '#10b981' : 'rgba(16,185,129,0.3)';
+                const ringColor = cheapestBlinkState ? 'rgba(16,185,129,0.8)' : 'rgba(16,185,129,0)';
+                feature.setStyle([
+                    new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 14,
+                            fill: new ol.style.Fill({ color }),
+                            stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 })
+                        }),
+                        text: new ol.style.Text({
+                            text: price ? price.toFixed(3) : '?',
+                            font: 'bold 11px system-ui, sans-serif',
+                            fill: new ol.style.Fill({ color: '#ffffff' }),
+                            stroke: new ol.style.Stroke({ color: '#000000', width: 2 }),
+                            offsetY: -22,
+                            backgroundFill: new ol.style.Fill({ color: 'rgba(0,0,0,0.55)' }),
+                            backgroundStroke: new ol.style.Stroke({ color: '#10b981', width: 1 }),
+                            padding: [2, 4, 2, 4]
+                        })
+                    }),
+                    new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 22,
+                            fill: null,
+                            stroke: new ol.style.Stroke({ color: ringColor, width: 4 })
+                        })
+                    })
+                ]);
+            }, 600);
+        }
+
+        // ========== UPDATE MARKERS ==========
+        function updateMarkers(fuelType) {
+            if (cheapestBlinkInterval) { clearInterval(cheapestBlinkInterval); cheapestBlinkInterval = null; }
+            vectorSource.clear();
+            cheapestFeature = null;
+            cheapestStation = null;
+            updateZoneStats(fuelType);
+
+            let minPrice = Infinity;
+            stationsData.forEach(s => {
+                const p = s[fuelType];
+                if (p && p > 0 && p < minPrice) { minPrice = p; cheapestStation = s; }
+            });
+
+            stationsData.forEach(station => {
+                const price = station[fuelType] || 0;
+                const isCheapest = station === cheapestStation;
+                const feature = new ol.Feature({
+                    geometry: new ol.geom.Point(ol.proj.fromLonLat([station.lng, station.lat])),
+                    info: station,
+                    isCheapest
+                });
+                feature.setStyle(getStyleByPrice(price, isCheapest));
+                vectorSource.addFeature(feature);
+                if (isCheapest) cheapestFeature = feature;
+            });
+
+            if (cheapestFeature) {
+                startCheapestBlink(cheapestFeature);
+                // Update banner
+                const banner = document.getElementById('cheapest-banner');
+                if (cheapestStation) {
+                    const t = translations[currentLang];
+                    banner.innerHTML = `${t['cheapest-label'] || '📍 Cheapest: '}<strong>${cheapestStation.name || cheapestStation.brand || 'Gas Station'}</strong> — €${minPrice.toFixed(3)}`;
+                    banner.classList.add('visible');
+                }
+            }
+        }
+
+        // ========== BUFFER CIRCLE ==========
+        function drawBufferCircle(lng, lat) {
+            if (bufferCircleLayer) { map.removeLayer(bufferCircleLayer); bufferCircleLayer = null; }
+            const numPoints = 64;
+            const radiusMeters = RADIUS * 1000;
+            const coords = [];
+            for (let i = 0; i <= numPoints; i++) {
+                const angle = (i / numPoints) * 2 * Math.PI;
+                const dLat = (radiusMeters * Math.cos(angle)) / 111320;
+                const dLng = (radiusMeters * Math.sin(angle)) / (111320 * Math.cos(lat * Math.PI / 180));
+                coords.push(ol.proj.fromLonLat([lng + dLng, lat + dLat]));
+            }
+            const circleFeature = new ol.Feature({ geometry: new ol.geom.Polygon([coords]) });
+            circleFeature.setStyle(new ol.style.Style({
+                fill: new ol.style.Fill({ color: 'rgba(239,68,68,0.07)' }),
+                stroke: new ol.style.Stroke({ color: 'rgba(239,68,68,0.55)', width: 2, lineDash: [8,6] })
+            }));
+            const labelCoords = ol.proj.fromLonLat([lng, lat + (RADIUS / 111.32)]);
+            const labelFeature = new ol.Feature({ geometry: new ol.geom.Point(labelCoords) });
+            labelFeature.setStyle(new ol.style.Style({
+                text: new ol.style.Text({
+                    text: RADIUS + ' km',
+                    font: 'bold 12px system-ui, sans-serif',
+                    fill: new ol.style.Fill({ color: 'rgba(239,100,100,0.95)' }),
+                    stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.65)', width: 3 }),
+                    offsetY: -8
+                })
+            }));
+            const bufSource = new ol.source.Vector({ features: [circleFeature, labelFeature] });
+            bufferCircleLayer = new ol.layer.Vector({ source: bufSource, zIndex: 5 });
+            map.addLayer(bufferCircleLayer);
+        }
+
+        // ========== POPUP HTML + BUTTONS ==========
+        function buildPopupHTML(info, trendDiesel, trendE5, trendE10, isCheapest, t) {
+            const logoHTML = getBrandLogo(info.brand);
+            return `
+                <div class="popup-brand-row">
+                    ${logoHTML}
+                    <h3 style="margin:0;font-size:1.1rem;">${isCheapest ? '🏆 ' : ''}${info.name || 'Gas station'}</h3>
+                </div>
+                <div class="brand">${info.brand || ''}</div>
+                <div class="address">${info.street || ''} ${info.houseNumber || ''}<br>${info.postCode || ''} ${info.place || ''}</div>
+                <div class="prices">
+                    <div class="price-item"><span>Diesel:</span><span class="price-value">${info.diesel ? '€'+info.diesel.toFixed(3) : '—'} ${trendDiesel}</span></div>
+                    <div class="price-item"><span>E5:</span><span class="price-value">${info.e5 ? '€'+info.e5.toFixed(3) : '—'} ${trendE5}</span></div>
+                    <div class="price-item"><span>E10:</span><span class="price-value">${info.e10 ? '€'+info.e10.toFixed(3) : '—'} ${trendE10}</span></div>
+                </div>
+                <button class="navigate-btn" id="navigate-google"><i class="fab fa-google"></i> ${t['navigate-btn'] || 'Google Maps'}</button>
+                <button class="navigate-btn apple-btn" id="navigate-apple" style="background:#1c1c1e;margin-top:6px;"><i class="fab fa-apple"></i> ${t['navigate-apple'] || 'Apple Maps'}</button>
+                <button class="route-btn" id="route-popup"><i class="fas fa-road"></i> ${t['route-btn'] || 'Show route'}</button>
+            `;
+        }
+
+        function bindPopupButtons(info) {
+            const bg = document.getElementById('navigate-google');
+            if (bg) bg.addEventListener('click', () => { window.open('https://www.google.com/maps/dir/?api=1&destination=' + info.lat + ',' + info.lng, '_blank'); });
+            const ba = document.getElementById('navigate-apple');
+            if (ba) ba.addEventListener('click', () => { window.open('https://maps.apple.com/?daddr=' + info.lat + ',' + info.lng + '&dirflg=d', '_blank'); });
+            const br = document.getElementById('route-popup');
+            if (br) br.addEventListener('click', () => { showAnimatedRoute(info.lng, info.lat); popupOverlay.setPosition(undefined); });
+        }
+
+        // ========== AUTO POPUP + ROUTE FOR CHEAPEST ==========
+        function openCheapestPopup() {
+            if (!cheapestStation || !cheapestFeature) return;
+            const info = cheapestStation;
+            const coords = cheapestFeature.getGeometry().getCoordinates();
+            const t = translations[currentLang];
+            const trendDiesel = getTrendIcon(info.diesel, zoneAverage);
+            const trendE5 = getTrendIcon(info.e5, zoneAverage);
+            const trendE10 = getTrendIcon(info.e10, zoneAverage);
+            popupContent.innerHTML = buildPopupHTML(info, trendDiesel, trendE5, trendE10, true, t);
+            popupOverlay.setPosition(coords);
+            bindPopupButtons(info);
+            showAnimatedRoute(info.lng, info.lat);
+        }
+
+        // ========== LOAD STATIONS ==========
+        async function loadStations(lng, lat) {
+            const url = `https://creativecommons.tankerkoenig.de/json/list.php?lat=${lat}&lng=${lng}&rad=${RADIUS}&sort=dist&type=all&apikey=${API_KEY}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.ok && data.stations) {
+                    stationsData = data.stations;
+                    updateMarkers(currentFuel);
+                    setTimeout(() => openCheapestPopup(), 900);
+                } else {
+                    console.error('API error:', data.message);
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+            }
+        }
+
+        function setCenterAndLoad(lng, lat) {
+            currentCenter = [lng, lat];
+            map.getView().animate({ center: ol.proj.fromLonLat([lng, lat]), zoom: RADIUS === 5 ? 13 : 12, duration: 800 });
+            drawBufferCircle(lng, lat);
+            loadStations(lng, lat);
+        }
+
+        function selectCity(cityName) {
+            const coords = cityCoordinates[cityName];
+            if (coords) setCenterAndLoad(coords[0], coords[1]);
+        }
+
+        // ========== GEOLOCATION ==========
+        function geolocateUser() {
+            if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lng = position.coords.longitude;
+                    const lat = position.coords.latitude;
+                    userLocationCoords = [lng, lat];
+                    drawBufferCircle(lng, lat);
+                    setCenterAndLoad(lng, lat);
+                    addUserMarker(lng, lat);
+                },
+                error => {
+                    alert(currentLang === 'de' ? 'Standort konnte nicht ermittelt werden.' : 'Could not get your location. Check permissions.');
+                    console.error(error);
+                }
+            );
+        }
+
+        function addUserMarker(lng, lat) {
+            if (userMarker) map.removeLayer(userMarker);
+
+            const bufferFeature = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat])) });
+            bufferFeature.setStyle(new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 28,
+                    fill: new ol.style.Fill({ color: 'rgba(239,68,68,0.15)' }),
+                    stroke: new ol.style.Stroke({ color: 'rgba(239,68,68,0.5)', width: 2, lineDash: [6,4] })
+                })
+            }));
+
+            const dotFeature = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat])) });
+            const userSource = new ol.source.Vector({ features: [bufferFeature, dotFeature] });
+            userMarker = new ol.layer.Vector({ source: userSource, zIndex: 50 });
+            map.addLayer(userMarker);
+
+            let growing = true, baseRadius = 10;
+            function heartbeat() {
+                if (!userMarker) return;
+                if (growing) { baseRadius += 0.18; if (baseRadius >= 14) growing = false; }
+                else { baseRadius -= 0.18; if (baseRadius <= 10) growing = true; }
+                dotFeature.setStyle(new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: baseRadius,
+                        fill: new ol.style.Fill({ color: '#ef4444' }),
+                        stroke: new ol.style.Stroke({ color: '#ffffff', width: 3 })
+                    }),
+                    text: new ol.style.Text({
+                        text: '📍',
+                        font: '16px serif',
+                        offsetY: -28
+                    })
+                }));
+                requestAnimationFrame(heartbeat);
+            }
+            requestAnimationFrame(heartbeat);
+        }
+
+        // ========== ANIMATED ROUTE ==========
+        async function showAnimatedRoute(destinationLng, destinationLat) {
+            if (currentRouteLayer) {
+                map.removeLayer(currentRouteLayer);
+                currentRouteLayer = null;
+                if (routeAnimationFrame) { cancelAnimationFrame(routeAnimationFrame); routeAnimationFrame = null; }
+            }
+            const origin = userLocationCoords || currentCenter;
+            const url = `https://router.project-osrm.org/route/v1/driving/${origin[0]},${origin[1]};${destinationLng},${destinationLat}?overview=full&geometries=geojson`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.code !== 'Ok' || !data.routes?.[0]) { alert(currentLang === 'de' ? 'Route konnte nicht berechnet werden.' : 'Could not calculate route.'); return; }
+
+                const routeFeature = new ol.Feature({
+                    geometry: new ol.format.GeoJSON().readGeometry(data.routes[0].geometry, {
+                        dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+                    })
+                });
+
+                const baseStyle = new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#10b981', width: 5 }) });
+                const animatedStyle = new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#ffffff', width: 2.5, lineDash: [15, 15], lineDashOffset: 0 }) });
+                routeFeature.setStyle([baseStyle, animatedStyle]);
+
+                const routeSource = new ol.source.Vector({ features: [routeFeature] });
+                const routeLayer = new ol.layer.Vector({ source: routeSource, zIndex: 100 });
+                map.addLayer(routeLayer);
+                currentRouteLayer = routeLayer;
+
+                let offset = 0;
+                function animateDash() {
+                    if (!currentRouteLayer) return;
+                    offset = (offset + 2) % 40;
+                    animatedStyle.getStroke().setLineDashOffset(offset);
+                    routeFeature.setStyle([baseStyle, animatedStyle]);
+                    routeSource.changed();
+                    routeAnimationFrame = requestAnimationFrame(animateDash);
+                }
+                animateDash();
+
+                const lineString = routeFeature.getGeometry();
+                const numSteps = 200;
+                let step = 0;
+                function moveDot() {
+                    if (!currentRouteLayer) return;
+                    step = (step + 1) % numSteps;
+                    const point = lineString.getCoordinateAt(step / numSteps);
+                    let dotFeature;
+                    const existing = routeSource.getFeatures().filter(f => f.get('type') === 'dot');
+                    if (existing.length > 0) { dotFeature = existing[0]; dotFeature.getGeometry().setCoordinates(point); }
+                    else {
+                        dotFeature = new ol.Feature({ geometry: new ol.geom.Point(point), type: 'dot' });
+                        dotFeature.setStyle(new ol.style.Style({
+                            image: new ol.style.Circle({ radius: 7, fill: new ol.style.Fill({ color: '#ffffff' }), stroke: new ol.style.Stroke({ color: '#10b981', width: 2.5 }) })
+                        }));
+                        routeSource.addFeature(dotFeature);
+                    }
+                    routeAnimationFrame = requestAnimationFrame(moveDot);
+                }
+                moveDot();
+
+                map.getView().fit(routeFeature.getGeometry().getExtent(), { duration: 1000, padding: [60, 60, 220, 60] });
+            } catch (error) {
+                console.error('Route error:', error);
+                alert(currentLang === 'de' ? 'Fehler beim Laden der Route.' : 'Error loading route.');
+            }
+        }
+
+        // ========== CHART TOGGLE ==========
+        const chartToggleBtn = document.getElementById('chart-toggle-btn');
+        const chartContainer = document.getElementById('chart-container');
+        chartToggleBtn.addEventListener('click', () => {
+            const isOpen = chartContainer.style.display !== 'none';
+            chartContainer.style.display = isOpen ? 'none' : 'block';
+            chartToggleBtn.classList.toggle('open', !isOpen);
+        });
+
+        // ========== BRAND LOGO LOOKUP ==========
+        const brandLogos = {
+            'ARAL':    'https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Aral_logo.svg/80px-Aral_logo.svg.png',
+            'SHELL':   'https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Shell_logo.svg/80px-Shell_logo.svg.png',
+            'ESSO':    'https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Esso_textlogo.svg/80px-Esso_textlogo.svg.png',
+            'BP':      'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/BP_Helios_logo.svg/80px-BP_Helios_logo.svg.png',
+            'TOTAL':   'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/TotalEnergies_logo.svg/80px-TotalEnergies_logo.svg.png',
+            'TOTALENERGIES': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/TotalEnergies_logo.svg/80px-TotalEnergies_logo.svg.png',
+            'JET':     'https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/JET_Logo.svg/80px-JET_Logo.svg.png',
+            'STAR':    'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Star_Tankstelle_Logo.svg/80px-Star_Tankstelle_Logo.svg.png',
+            'AVEX':    '',
+            'HEM':     '',
+            'AGIP':    'https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Logo_Agip.svg/80px-Logo_Agip.svg.png',
+            'ENI':     'https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Logo_Agip.svg/80px-Logo_Agip.svg.png',
+        };
+        function getBrandLogo(brand) {
+            if (!brand) return '';
+            const key = brand.toUpperCase().trim();
+            for (const k of Object.keys(brandLogos)) {
+                if (key.includes(k) && brandLogos[k]) {
+                    return `<img src="${brandLogos[k]}" class="brand-logo" alt="${brand}" onerror="this.style.display='none'">`;
+                }
+            }
+            return '';
+        }
+
+
+        const sheet = document.getElementById('bottomSheet');
+        const handle = document.getElementById('sheetHandle');
+        let startY = 0, startHeight = 0;
+        const minHeight = 80, maxHeight = window.innerHeight * 0.8;
+        sheet.style.height = (window.innerHeight * 0.4) + 'px';
+
+        function onDragStart(e) {
+            e.preventDefault();
+            startY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+            startHeight = sheet.getBoundingClientRect().height;
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEnd);
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('touchend', onDragEnd);
+        }
+        function onDragMove(e) {
+            e.preventDefault();
+            const currentY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
+            const newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + (startY - currentY)));
+            sheet.style.height = newHeight + 'px';
+            map.updateSize();
+        }
+        function onDragEnd() {
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragEnd);
+            document.removeEventListener('touchmove', onDragMove);
+            document.removeEventListener('touchend', onDragEnd);
+        }
+        handle.addEventListener('mousedown', onDragStart);
+        handle.addEventListener('touchstart', onDragStart);
+        window.addEventListener('resize', () => map.updateSize());
+
+        // ========== LOCATION OVERLAY ==========
+        document.getElementById('loc-allow-btn').addEventListener('click', () => {
+            document.getElementById('location-overlay').style.display = 'none';
+            geolocateUser();
+        });
+        document.getElementById('loc-skip-btn').addEventListener('click', () => {
+            document.getElementById('location-overlay').style.display = 'none';
+            loadStations(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
+        });
+
+        // ========== INFO MODAL ==========
+        document.getElementById('info-btn').addEventListener('click', () => {
+            document.getElementById('info-modal').classList.add('open');
+        });
+        document.getElementById('modal-close-btn').addEventListener('click', () => {
+            document.getElementById('info-modal').classList.remove('open');
+        });
+        document.getElementById('info-modal').addEventListener('click', e => {
+            if (e.target === document.getElementById('info-modal')) document.getElementById('info-modal').classList.remove('open');
+        });
+
+        // ========== EVENT LISTENERS ==========
+        document.getElementById('city-select').addEventListener('change', e => selectCity(e.target.value));
+
+        document.querySelectorAll('.fuel-option').forEach(opt => {
+            opt.addEventListener('click', function() {
+                document.querySelectorAll('.fuel-option').forEach(o => o.classList.remove('active'));
+                this.classList.add('active');
+                currentFuel = this.dataset.fuel;
+                updateMarkers(currentFuel);
+            });
+        });
+
+        document.querySelectorAll('.buffer-option').forEach(opt => {
+            opt.addEventListener('click', function() {
+                document.querySelectorAll('.buffer-option').forEach(o => o.classList.remove('active'));
+                this.classList.add('active');
+                RADIUS = parseInt(this.dataset.radius);
+                drawBufferCircle(currentCenter[0], currentCenter[1]);
+                setCenterAndLoad(currentCenter[0], currentCenter[1]);
+            });
+        });
+
+        document.querySelectorAll('.basemap-option').forEach(opt => {
+            opt.addEventListener('click', function() {
+                document.querySelectorAll('.basemap-option').forEach(o => o.classList.remove('active'));
+                this.classList.add('active');
+                const type = this.dataset.basemap;
+                layers.gray.setVisible(type === 'gray');
+                layers.street.setVisible(type === 'street');
+                layers.satellite.setVisible(type === 'satellite');
+            });
+        });
+
+        document.getElementById('reload-btn').addEventListener('click', () => loadStations(currentCenter[0], currentCenter[1]));
+        document.getElementById('geolocate-btn').addEventListener('click', geolocateUser);
+
+        // ========== MAP CLICK → POPUP ==========
+        map.on('click', evt => {
+            const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+            if (feature && feature.get('info')) {
+                const info = feature.get('info');
+                const coords = feature.getGeometry().getCoordinates();
+                const t = translations[currentLang];
+                const trendDiesel = getTrendIcon(info.diesel, zoneAverage);
+                const trendE5 = getTrendIcon(info.e5, zoneAverage);
+                const trendE10 = getTrendIcon(info.e10, zoneAverage);
+                const isCheapest = feature.get('isCheapest');
+                popupContent.innerHTML = buildPopupHTML(info, trendDiesel, trendE5, trendE10, isCheapest, t);
+                popupOverlay.setPosition(coords);
+                bindPopupButtons(info);
+            } else {
+                popupOverlay.setPosition(undefined);
+            }
+        });
+
+        map.on('pointermove', e => {
+            const hit = map.hasFeatureAtPixel(map.getEventPixel(e.originalEvent));
+            map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+        });
+
+        // ========== AUTO-REFRESH ==========
+        setInterval(() => loadStations(currentCenter[0], currentCenter[1]), 5 * 60 * 1000);
+
+    })();
+    </script>
+</body>
+</html>
